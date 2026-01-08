@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>멀티 에임 연습기</title>
+    <style>
+        body {
+            user-select: none;
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        .target {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: red;
+            position: absolute;
+            cursor: pointer;
+        }
+        #score, #timer {
+            position: fixed;
+            top: 10px;
+            color: black;
+            font-size: 1.2rem;
+            background: rgba(255,255,255,0.8);
+            padding: 4px 8px;
+            border-radius: 4px;
+            z-index: 1000;
+        }
+        #score { left: 10px; }
+        #timer { right: 10px; }
+
+        #controls {
+            position: fixed;
+            top: 50px;
+            left: 10px;
+            display: flex;
+            gap: 6px;
+            z-index: 1000;
+        }
+        #controls button {
+            padding: 4px 10px;
+            font-size: 0.9rem;
+        }
+
+        #leaderboard {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(255,255,255,0.9);
+            padding: 8px 10px;
+            border-radius: 4px;
+            max-width: 280px;
+            font-size: 0.9rem;
+            z-index: 1000;
+        }
+        #leaderboard h3 {
+            margin: 0 0 4px 0;
+            font-size: 1rem;
+        }
+        #leaderboard ol {
+            margin: 0;
+            padding-left: 18px;
+        }
+        #message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255,255,255,0.95);
+            padding: 16px 20px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            display: none;
+            z-index: 1000;
+        }
+
+        /* 맞췄을 때 터지는 원 이펙트 */
+        .hit-effect {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            border: 3px solid rgba(0, 255, 0, 0.8);
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            animation: hit-burst 0.4s ease-out forwards;
+            z-index: 900;
+        }
+        @keyframes hit-burst {
+            0% {
+                transform: translate(-50%, -50%) scale(0.2);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(2.0);
+                opacity: 0;
+            }
+        }
+
+        /* 잘못 클릭했을 때 X 이펙트 */
+        .miss-x {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            z-index: 900;
+            opacity: 0;
+            animation: miss-pop 0.5s ease-out forwards;
+        }
+        .miss-x::before,
+        .miss-x::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 24px;
+            height: 3px;
+            background: rgba(255, 0, 0, 0.9);
+            transform-origin: center;
+        }
+        .miss-x::before {
+            transform: translate(-50%, -50%) rotate(45deg);
+        }
+        .miss-x::after {
+            transform: translate(-50%, -50%) rotate(-45deg);
+        }
+        @keyframes miss-pop {
+            0% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(0.6);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(1.2);
+            }
+        }
+    </style>
+</head>
+<body>
+<div id="score">점수: 0</div>
+<div id="timer">남은 시간: 30초</div>
+
+<div id="controls">
+    <button id="endBtn">게임 종료</button>
+    <button id="pauseBtn">일시정지</button>
+    <button id="restartBtn">다시 시작</button>
+</div>
+
+<div id="leaderboard">
+    <h3>순위표 (상위 5명)</h3>
+    <ol id="rankList"></ol>
+</div>
+<div id="message"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const scoreElem = document.getElementById('score');
+    const timerElem = document.getElementById('timer');
+    const messageElem = document.getElementById('message');
+    const rankList = document.getElementById('rankList');
+    const endBtn = document.getElementById('endBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const restartBtn = document.getElementById('restartBtn');
+
+    const MAX_TARGETS = 10;
+    const SPAWN_INTERVAL = 350;
+    const TARGET_LIFETIME = 2000;
+
+    let score, timeLeft, gameActive, isPaused;
+    let timerId = null;
+    let spawnId = null;
+
+    function resetState() {
+        score = 0;
+        timeLeft = 30;   // 제한시간 30초
+        gameActive = false;
+        isPaused = false;
+        scoreElem.textContent = `점수: ${score}`;
+        timerElem.textContent = `남은 시간: ${timeLeft}초`;
+        messageElem.style.display = 'none';
+        pauseBtn.textContent = '일시정지';
+    }
+
+    function clearAllTargets() {
+        document.querySelectorAll('.target').forEach(t => t.remove());
+    }
+
+    function createHitEffect(x, y) {
+        const effect = document.createElement('div');
+        effect.className = 'hit-effect';
+        effect.style.left = x + 'px';
+        effect.style.top = y + 'px';
+        document.body.appendChild(effect);
+        setTimeout(() => effect.remove(), 450);
+    }
+
+    function createMissX(x, y) {
+        const miss = document.createElement('div');
+        miss.className = 'miss-x';
+        miss.style.left = x + 'px';
+        miss.style.top = y + 'px';
+        document.body.appendChild(miss);
+        setTimeout(() => miss.remove(), 550);
+    }
+
+    function spawnTarget() {
+        if (!gameActive || isPaused) return;
+        const currentTargets = document.querySelectorAll('.target').length;
+        if (currentTargets >= MAX_TARGETS) return;
+
+        const target = document.createElement('div');
+        target.className = 'target';
+
+        const size = 40;
+        const x = Math.random() * (window.innerWidth - size);
+        const y = Math.random() * (window.innerHeight - size);
+        target.style.left = x + 'px';
+        target.style.top = y + 'px';
+
+        target.addEventListener('click', (e) => {
+            if (!gameActive || isPaused) return;
+            e.stopPropagation();
+            score++;
+            scoreElem.textContent = `점수: ${score}`;
+            createHitEffect(e.clientX, e.clientY);
+            target.remove();
+        });
+
+        document.body.appendChild(target);
+
+        // 못 누른 타겟은 자동 감점 없이 그냥 제거만
+        setTimeout(() => {
+            if (document.body.contains(target)) {
+                target.remove();
+            }
+        }, TARGET_LIFETIME);
+    }
+
+    function startSpawning() {
+        if (spawnId) clearInterval(spawnId);
+        spawnId = setInterval(spawnTarget, SPAWN_INTERVAL);
+    }
+
+    function stopSpawning() {
+        if (spawnId) {
+            clearInterval(spawnId);
+            spawnId = null;
+        }
+    }
+
+    function startTimer() {
+        if (timerId) clearInterval(timerId);
+        timerId = setInterval(() => {
+            if (!gameActive || isPaused) return;
+            timeLeft--;
+            timerElem.textContent = `남은 시간: ${timeLeft}초`;
+            if (timeLeft <= 0) {
+                endGame();
+            }
+        }, 1000);
+    }
+
+    function stopTimer() {
+        if (timerId) {
+            clearInterval(timerId);
+            timerId = null;
+        }
+    }
+
+    function saveScore(name, score) {
+        const raw = localStorage.getItem('aimTrainerRanksMulti');
+        let ranks = [];
+        if (raw) {
+            try {
+                ranks = JSON.parse(raw);
+            } catch(e) {
+                ranks = [];
+            }
+        }
+        ranks.push({ name, score, date: new Date().toISOString() });
+        ranks.sort((a, b) => b.score - a.score);
+        ranks = ranks.slice(0, 20);
+        localStorage.setItem('aimTrainerRanksMulti', JSON.stringify(ranks));
+    }
+
+    function renderLeaderboard() {
+        const raw = localStorage.getItem('aimTrainerRanksMulti');
+        rankList.innerHTML = '';
+        if (!raw) return;
+        let ranks = [];
+        try {
+            ranks = JSON.parse(raw);
+        } catch(e) {
+            return;
+        }
+        ranks.slice(0, 5).forEach((item) => {
+            const li = document.createElement('li');
+            li.textContent = `${item.name}: ${item.score}점`;
+            rankList.appendChild(li);
+        });
+    }
+
+    function endGame() {
+        if (!gameActive) return;
+        gameActive = false;
+        isPaused = false;
+        stopTimer();
+        stopSpawning();
+        messageElem.style.display = 'block';
+        messageElem.textContent = `게임 종료! 최종 점수: ${score}`;
+        clearAllTargets();
+        pauseBtn.textContent = '일시정지';
+
+        const name = prompt('닉네임을 입력하세요 (순위표 저장):', '');
+        if (name && name.trim() !== '') {
+            saveScore(name.trim(), score);
+            renderLeaderboard();
+        }
+    }
+
+    function startGame() {
+        stopTimer();
+        stopSpawning();
+        clearAllTargets();
+        resetState();
+
+        gameActive = true;
+        renderLeaderboard();
+        startTimer();
+        startSpawning();
+    }
+
+    function togglePause() {
+        if (!gameActive) return;
+        isPaused = !isPaused;
+        pauseBtn.textContent = isPaused ? '재개' : '일시정지';
+    }
+
+    // 잘못 클릭만 감점 + X 이펙트
+    document.body.addEventListener('click', (e) => {
+        if (!gameActive || isPaused) return;
+        if (e.target.classList.contains('target')) return;
+        if (e.target.closest('#controls') || e.target.closest('#leaderboard')) return;
+        score--;
+        scoreElem.textContent = `점수: ${score}`;
+        createMissX(e.clientX, e.clientY);
+    });
+
+    endBtn.addEventListener('click', () => {
+        endGame();
+    });
+
+    pauseBtn.addEventListener('click', () => {
+        togglePause();
+    });
+
+    restartBtn.addEventListener('click', () => {
+        startGame();
+    });
+
+    resetState();
+    renderLeaderboard();
+    startGame();
+});
+</script>
+</body>
+</html>
