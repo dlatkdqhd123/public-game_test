@@ -157,215 +157,44 @@
 <div id="message"></div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const scoreElem = document.getElementById('score');
-    const timerElem = document.getElementById('timer');
-    const messageElem = document.getElementById('message');
-    const rankList = document.getElementById('rankList');
-    const endBtn = document.getElementById('endBtn');
-    const pauseBtn = document.getElementById('pauseBtn');
-    const restartBtn = document.getElementById('restartBtn');
+const BIN_URL = '...';
+const API_KEY = '...';
 
-    const MAX_TARGETS = 10;
-    const SPAWN_INTERVAL = 350;
-    const TARGET_LIFETIME = 2000;
+// 점수 추가
+async function addScoreToBin(name, score) {
+  const getRes = await fetch(BIN_URL, {
+    headers: { 'X-Master-Key': API_KEY }
+  });
+  const data = await getRes.json();          // v3에서는 { record: {...}, metadata: {...} } 형태일 수 있음
+  const record = data.record || data;        // record가 있으면 그 안, 없으면 그대로 사용
+  const list = Array.isArray(record.scores) ? record.scores : [];
 
-    let score, timeLeft, gameActive, isPaused;
-    let timerId = null;
-    let spawnId = null;
+  list.push({ name, score });
 
-    function resetState() {
-        score = 0;
-        timeLeft = 30;   // 제한시간 30초
-        gameActive = false;
-        isPaused = false;
-        scoreElem.textContent = `점수: ${score}`;
-        timerElem.textContent = `남은 시간: ${timeLeft}초`;
-        messageElem.style.display = 'none';
-        pauseBtn.textContent = '일시정지';
-    }
+  const newRecord = { ...record, scores: list };
 
-    function clearAllTargets() {
-        document.querySelectorAll('.target').forEach(t => t.remove());
-    }
+  await fetch(BIN_URL, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Master-Key': API_KEY
+    },
+    body: JSON.stringify(newRecord)
+  });
+}
 
-    function createHitEffect(x, y) {
-        const effect = document.createElement('div');
-        effect.className = 'hit-effect';
-        effect.style.left = x + 'px';
-        effect.style.top = y + 'px';
-        document.body.appendChild(effect);
-        setTimeout(() => effect.remove(), 450);
-    }
+// 상위 5개
+async function getTop5FromBin() {
+  const res = await fetch(BIN_URL, {
+    headers: { 'X-Master-Key': API_KEY }
+  });
+  const data = await res.json();
+  const record = data.record || data;
+  const list = Array.isArray(record.scores) ? record.scores : [];
 
-    function createMissX(x, y) {
-        const miss = document.createElement('div');
-        miss.className = 'miss-x';
-        miss.style.left = x + 'px';
-        miss.style.top = y + 'px';
-        document.body.appendChild(miss);
-        setTimeout(() => miss.remove(), 550);
-    }
-
-    function spawnTarget() {
-        if (!gameActive || isPaused) return;
-        const currentTargets = document.querySelectorAll('.target').length;
-        if (currentTargets >= MAX_TARGETS) return;
-
-        const target = document.createElement('div');
-        target.className = 'target';
-
-        const size = 40;
-        const x = Math.random() * (window.innerWidth - size);
-        const y = Math.random() * (window.innerHeight - size);
-        target.style.left = x + 'px';
-        target.style.top = y + 'px';
-
-        target.addEventListener('click', (e) => {
-            if (!gameActive || isPaused) return;
-            e.stopPropagation();
-            score++;
-            scoreElem.textContent = `점수: ${score}`;
-            createHitEffect(e.clientX, e.clientY);
-            target.remove();
-        });
-
-        document.body.appendChild(target);
-
-        // 못 누른 타겟은 자동 감점 없이 그냥 제거만
-        setTimeout(() => {
-            if (document.body.contains(target)) {
-                target.remove();
-            }
-        }, TARGET_LIFETIME);
-    }
-
-    function startSpawning() {
-        if (spawnId) clearInterval(spawnId);
-        spawnId = setInterval(spawnTarget, SPAWN_INTERVAL);
-    }
-
-    function stopSpawning() {
-        if (spawnId) {
-            clearInterval(spawnId);
-            spawnId = null;
-        }
-    }
-
-    function startTimer() {
-        if (timerId) clearInterval(timerId);
-        timerId = setInterval(() => {
-            if (!gameActive || isPaused) return;
-            timeLeft--;
-            timerElem.textContent = `남은 시간: ${timeLeft}초`;
-            if (timeLeft <= 0) {
-                endGame();
-            }
-        }, 1000);
-    }
-
-    function stopTimer() {
-        if (timerId) {
-            clearInterval(timerId);
-            timerId = null;
-        }
-    }
-
-    function saveScore(name, score) {
-        const raw = localStorage.getItem('aimTrainerRanksMulti');
-        let ranks = [];
-        if (raw) {
-            try {
-                ranks = JSON.parse(raw);
-            } catch(e) {
-                ranks = [];
-            }
-        }
-        ranks.push({ name, score, date: new Date().toISOString() });
-        ranks.sort((a, b) => b.score - a.score);
-        ranks = ranks.slice(0, 20);
-        localStorage.setItem('aimTrainerRanksMulti', JSON.stringify(ranks));
-    }
-
-    function renderLeaderboard() {
-        const raw = localStorage.getItem('aimTrainerRanksMulti');
-        rankList.innerHTML = '';
-        if (!raw) return;
-        let ranks = [];
-        try {
-            ranks = JSON.parse(raw);
-        } catch(e) {
-            return;
-        }
-        ranks.slice(0, 5).forEach((item) => {
-            const li = document.createElement('li');
-            li.textContent = `${item.name}: ${item.score}점`;
-            rankList.appendChild(li);
-        });
-    }
-
-    function endGame() {
-        if (!gameActive) return;
-        gameActive = false;
-        isPaused = false;
-        stopTimer();
-        stopSpawning();
-        messageElem.style.display = 'block';
-        messageElem.textContent = `게임 종료! 최종 점수: ${score}`;
-        clearAllTargets();
-        pauseBtn.textContent = '일시정지';
-
-        const name = prompt('닉네임을 입력하세요 (순위표 저장):', '');
-        if (name && name.trim() !== '') {
-            saveScore(name.trim(), score);
-            renderLeaderboard();
-        }
-    }
-
-    function startGame() {
-        stopTimer();
-        stopSpawning();
-        clearAllTargets();
-        resetState();
-
-        gameActive = true;
-        renderLeaderboard();
-        startTimer();
-        startSpawning();
-    }
-
-    function togglePause() {
-        if (!gameActive) return;
-        isPaused = !isPaused;
-        pauseBtn.textContent = isPaused ? '재개' : '일시정지';
-    }
-
-    // 잘못 클릭만 감점 + X 이펙트
-    document.body.addEventListener('click', (e) => {
-        if (!gameActive || isPaused) return;
-        if (e.target.classList.contains('target')) return;
-        if (e.target.closest('#controls') || e.target.closest('#leaderboard')) return;
-        score--;
-        scoreElem.textContent = `점수: ${score}`;
-        createMissX(e.clientX, e.clientY);
-    });
-
-    endBtn.addEventListener('click', () => {
-        endGame();
-    });
-
-    pauseBtn.addEventListener('click', () => {
-        togglePause();
-    });
-
-    restartBtn.addEventListener('click', () => {
-        startGame();
-    });
-
-    resetState();
-    renderLeaderboard();
-    startGame();
-});
+  list.sort((a, b) => b.score - a.score);
+  return list.slice(0, 5);
+}
 </script>
     // 1) 필요한 값 세팅
 const BIN_URL = '여기에_JSONBin_bin_URL_붙여넣기';  // 예: https://api.jsonbin.io/v3/b/xxxxx
