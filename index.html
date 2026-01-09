@@ -367,5 +367,71 @@ document.addEventListener('DOMContentLoaded', function () {
     startGame();
 });
 </script>
+    // 1) 필요한 값 세팅
+const BIN_URL = '여기에_JSONBin_bin_URL_붙여넣기';  // 예: https://api.jsonbin.io/v3/b/xxxxx
+const API_KEY = '여기에_발급받은_X-Master-Key_붙여넣기';
+
+// 2) 점수 추가 (게임 종료 시 호출)
+async function addScoreToBin(name, score) {
+  try {
+    // 기존 점수 목록 가져오기
+    const getRes = await fetch(BIN_URL, {
+      headers: {
+        'X-Master-Key': API_KEY
+      }
+    });
+    const data = await getRes.json();
+    const list = Array.isArray(data) ? data : (Array.isArray(data.record) ? data.record : []);
+
+    // 새 점수 추가
+    list.push({ name, score });
+
+    // 다시 저장 (전체 배열 덮어쓰기)
+    await fetch(BIN_URL, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': API_KEY
+      },
+      body: JSON.stringify(list)
+    });
+  } catch (err) {
+    console.error('addScoreToBin error', err);
+  }
+}
+
+// 3) 상위 5개 점수 가져오기
+async function getTop5FromBin() {
+  try {
+    const res = await fetch(BIN_URL, {
+      headers: {
+        'X-Master-Key': API_KEY
+      }
+    });
+    const data = await res.json();
+    const list = Array.isArray(data) ? data : (Array.isArray(data.record) ? data.record : []);
+
+    list.sort((a, b) => b.score - a.score);
+    return list.slice(0, 5);
+  } catch (err) {
+    console.error('getTop5FromBin error', err);
+    return [];
+  }
+}
+
+// 4) 화면에 순위표 표시 (HTML에 <ul id="ranking-list"></ul> 있다고 가정)
+async function renderRanking() {
+  const scores = await getTop5FromBin();
+  const listEl = document.getElementById('ranking-list');
+  if (!listEl) return;
+
+  listEl.innerHTML = '';
+  scores.forEach((item, idx) => {
+    const li = document.createElement('li');
+    li.textContent = `${idx + 1}위 - ${item.name}: ${item.score}`;
+    listEl.appendChild(li);
+  });
+}
+
 </body>
 </html>
