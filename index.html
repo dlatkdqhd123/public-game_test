@@ -162,8 +162,8 @@ const API_KEY = '...';
 
 // 점수 추가
 async function addScoreToBin(name, score) {
-  const getRes = await fetch(BIN_URL, {
-    headers: { 'X-Master-Key': API_KEY }
+  const getRes = await fetch(BIN_URL, {https://api.jsonbin.io/v3/b/6960665fd0ea881f405e7924
+    headers: { 'X-Master-Key': $2a$10$Zc5XwU66u39U6RrTpM.r8Osz3tfGMVonD4SVE2GwTP81.d3sd/pyi }
   });
   const data = await getRes.json();          // v3에서는 { record: {...}, metadata: {...} } 형태일 수 있음
   const record = data.record || data;        // record가 있으면 그 안, 없으면 그대로 사용
