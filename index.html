@@ -148,6 +148,22 @@
     <button id="endBtn">게임 종료</button>
     <button id="pauseBtn">일시정지</button>
     <button id="restartBtn">다시 시작</button>
+
+    <!-- 추가: 난이도 조절 바 -->
+    <div style="margin-left: 10px; color: black; font-size: 0.8rem;">
+        동시 타겟 수:
+        <input id="targetCountRange" type="range" min="1" max="5" value="2">
+        <span id="targetCountValue">2</span>개
+        <br>
+        생성 속도:
+        <input id="speedRange" type="range" min="1" max="5" value="3">
+        <span id="speedValue">보통</span>
+    </div>
+</div>
+
+    <button id="endBtn">게임 종료</button>
+    <button id="pauseBtn">일시정지</button>
+    <button id="restartBtn">다시 시작</button>
 </div>
 
 <div id="leaderboard">
@@ -157,130 +173,465 @@
 <div id="message"></div>
 
 <script>
-    // 1) 필요한 값 세팅
+  // ===== 1. JSONBin 설정 =====
+  const BIN_URL = 'https://api.jsonbin.io/v3/b/6960665fd0ea881f405e7924/latest';
+  const API_KEY = '$2a$10$Zc5XwU66u39U6RrTpM.r8Osz3tfGMVonD4SVE2GwTP81.d3sd/pyi';
 
-const BIN_URL = 'https://api.jsonbin.io/v3/b/6960665fd0ea881f405e7924';
-const API_KEY = '$2a$10$Zc5XwU66u39U6RrTpM.r8Osz3tfGMVonD4SVE2GwTP81.d3sd/pyi';
+  async function addScoreToBin(name, score) {
+    try {
+      const getRes = await fetch(BIN_URL, {
+        headers: { 'X-Master-Key': API_KEY }
+      });
+      const data = await getRes.json();
+      const record = data.record || data;
+      const list = Array.isArray(record.scores) ? record.scores : [];
 
-async function addScoreToBin(name, score) {
-  try {
-    const getRes = await fetch(BIN_URL, {
-      headers: { 'X-Master-Key': API_KEY }
-    });
-    const data = await getRes.json();
-    const record = data.record || data;
-    const list = Array.isArray(record.scores) ? record.scores : [];
+      list.push({ name, score });
 
-    list.push({ name, score });
-
-    const newRecord = { ...record, scores: list };
-
-    await fetch(BIN_URL.replace('/latest', ''), {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': API_KEY
-      },
-      body: JSON.stringify(newRecord)
-    });
-  } catch (e) {
-    console.error('addScoreToBin error', e);
-  }
-}
-
-async function getTop5FromBin() {
-  try {
-    const res = await fetch(BIN_URL, {
-      headers: { 'X-Master-Key': API_KEY }
-    });
-    const data = await res.json();
-    const record = data.record || data;
-    const list = Array.isArray(record.scores) ? record.scores : [];
-
-    list.sort((a, b) => b.score - a.score);
-    return list.slice(0, 5);
-  } catch (e) {
-    console.error('getTop5FromBin error', e);
-    return [];
-  }
-}
-
-async function renderRanking() {
-  const scores = await getTop5FromBin();
-  const listEl = document.getElementById('ranking-list');
-  if (!listEl) return;
-
-  listEl.innerHTML = '';
-  scores.forEach((item, idx) => {
-    const li = document.createElement('li');
-    li.textContent = `${idx + 1}위 - ${item.name}: ${item.score}`;
-    listEl.appendChild(li);
-  });
-}
-let timeLeft = 30;
-let score = 0;
-let timerId = null;
-
-function updateUI() {
-  const scoreEl = document.getElementById('score');
-  const timeEl  = document.getElementById('time');
-  if (scoreEl) scoreEl.textContent = score;
-  if (timeEl)  timeEl.textContent  = timeLeft;
-}
-
-function startGame() {
-  if (timerId) return; // 이미 진행 중이면 무시
-  timeLeft = 30;
-  score = 0;
-  updateUI();
-
-  timerId = setInterval(() => {
-    timeLeft--;
-    updateUI();
-    if (timeLeft <= 0) {
-      endGame();
+      const newRecord = { ...record, scores: list };
+      const putUrl = BIN_URL.replace('/latest', '');
+      await fetch(putUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Master-Key': API_KEY
+        },
+        body: JSON.stringify(newRecord)
+      });
+    } catch (e) {
+      console.error('addScoreToBin error', e);
     }
-  }, 1000);
-}
+  }
 
-function pauseGame() {
-  if (!timerId) return;
-  clearInterval(timerId);
-  timerId = null;
-}
+  async function getTop10FromBin() {
+    try {
+      const res = await fetch(BIN_URL, {
+        headers: { 'X-Master-Key': API_KEY }
+      });
+      const data = await res.json();
+      const record = data.record || data;
+      const list = Array.isArray(record.scores) ? record.scores : [];
 
-function restartGame() {
-  pauseGame();
-  startGame();
-}
+      list.sort((a, b) => b.score - a.score);
+      return list.slice(0, 10);
+    } catch (e) {
+      console.error('getTop10FromBin error', e);
+      return [];
+    }
+  }
 
-function endGame() {
-  pauseGame();
-  const name = prompt('이름을 입력하세요') || 'noname';
-  // JSONBin 저장 함수가 있다면 여기서 호출
-  if (typeof addScoreToBin === 'function') {
-    addScoreToBin(name, score).then(() => {
-      if (typeof renderRanking === 'function') renderRanking();
+  // 좌측 하단 순위표 (1~10위, 1~3위 강조)
+  async function renderRanking() {
+    const scores = await getTop10FromBin();
+    const listEl = document.getElementById('rankList');
+    if (!listEl) return;
+
+    listEl.innerHTML = '';
+    scores.forEach((item, idx) => {
+      const li = document.createElement('li');
+      li.textContent = `${idx + 1}위 - ${item.name}: ${item.score}`;
+
+      if (idx === 0) {
+        li.style.fontWeight = '900';
+        li.style.fontSize = '1.1rem';
+        li.style.color = '#d4af37';
+      } else if (idx === 1) {
+        li.style.fontWeight = '800';
+        li.style.fontSize = '1.05rem';
+        li.style.color = '#c0c0c0';
+      } else if (idx === 2) {
+        li.style.fontWeight = '800';
+        li.style.fontSize = '1.02rem';
+        li.style.color = '#cd7f32';
+      } else {
+        li.style.opacity = '0.9';
+      }
+      listEl.appendChild(li);
     });
   }
-}
 
-// 페이지 로드 시 버튼 연결 + 순위표 렌더링
-window.addEventListener('load', () => {
-  const startBtn   = document.getElementById('start-button');
-  const pauseBtn   = document.getElementById('pause-button');
-  const restartBtn = document.getElementById('restart-button');
+  // ===== 2. 게임 상태 =====
+  let score = 0;
+  let timeLeft = 30;
+  let timerId = null;
+  let isRunning = false;
 
-  if (startBtn)   startBtn.addEventListener('click', startGame);
-  if (pauseBtn)   pauseBtn.addEventListener('click', pauseGame);
-  if (restartBtn) restartBtn.addEventListener('click', restartGame);
+  // 난이도 (슬라이더로 조절되는 값)
+  let maxTargets = 2;            // 동시에 나오는 타겟 수
+  let minSpawnInterval = 600;    // 생성 간격 최소(ms)
+  let maxSpawnInterval = 1400;   // 생성 간격 최대(ms)
 
-  if (typeof renderRanking === 'function') {
-    renderRanking();
+  const targetLifeMin = 900;     // 타겟 최소 생존시간(ms)
+  const targetLifeMax = 2200;    // 타겟 최대 생존시간(ms)
+
+  const starChance = 0.12;       // 별 확률
+  const maxStarsPerGame = 5;     // 게임당 최대 별 개수
+  let starsSpawnedThisGame = 0;
+
+  let spawnTimeoutId = null;
+
+  function updateUI() {
+    const scoreEl = document.getElementById('score');
+    const timerEl = document.getElementById('timer');
+    if (scoreEl) scoreEl.textContent = `점수: ${score}`;
+    if (timerEl) timerEl.textContent = `남은 시간: ${timeLeft}초`;
   }
-});
 
+  function randomBetween(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  // ★ 슬라이더 → 난이도 적용
+  function applyDifficultyFromSliders() {
+    const countRange = document.getElementById('targetCountRange');
+    const speedRange = document.getElementById('speedRange');
+    const countValue = document.getElementById('targetCountValue');
+    const speedValue = document.getElementById('speedValue');
+    if (!countRange || !speedRange) return;
+
+    const count = Number(countRange.value); // 1~5
+    const speed = Number(speedRange.value); // 1~5
+
+    maxTargets = count;
+    if (countValue) countValue.textContent = String(count);
+
+    let minMs, maxMs;
+    switch (speed) {
+      case 1:
+        minMs = 1200; maxMs = 2200; if (speedValue) speedValue.textContent = '매우 느림'; break;
+      case 2:
+        minMs = 900;  maxMs = 1800; if (speedValue) speedValue.textContent = '느림'; break;
+      case 3:
+        minMs = 600;  maxMs = 1400; if (speedValue) speedValue.textContent = '보통'; break;
+      case 4:
+        minMs = 350;  maxMs = 900;  if (speedValue) speedValue.textContent = '빠름'; break;
+      case 5:
+      default:
+        minMs = 200;  maxMs = 700;  if (speedValue) speedValue.textContent = '매우 빠름'; break;
+    }
+    minSpawnInterval = minMs;
+    maxSpawnInterval = maxMs;
+  }
+
+  function spawnTargetOnce() {
+    if (!isRunning) return;
+
+    const currentTargets = document.querySelectorAll('.target').length;
+    if (currentTargets >= maxTargets) {
+      scheduleNextSpawn();
+      return;
+    }
+
+    let isStar = false;
+    if (starsSpawnedThisGame < maxStarsPerGame) {
+      if (Math.random() < starChance) {
+        isStar = true;
+        starsSpawnedThisGame++;
+      }
+    }
+
+    const target = document.createElement('div');
+    target.className = 'target';
+
+    const size = isStar ? 30 : 40;
+    const maxX = window.innerWidth - size;
+    const maxY = window.innerHeight - size;
+    const x = Math.random() * maxX;
+    const y = Math.random() * maxY;
+
+    target.style.width = `${size}px`;
+    target.style.height = `${size}px`;
+    target.style.left = `${x}px`;
+    target.style.top = `${y}px`;
+
+    if (isStar) {
+      target.style.background = 'gold';
+      target.style.borderRadius = '50%';
+      target.style.boxShadow = '0 0 8px rgba(255, 215, 0, 0.9)';
+      target.textContent = '★';
+      target.style.color = 'black';
+      target.style.display = 'flex';
+      target.style.alignItems = 'center';
+      target.style.justifyContent = 'center';
+      target.style.fontSize = '18px';
+      target.dataset.star = 'true';
+    } else {
+      target.style.background = 'red';
+    }
+
+    target.addEventListener('click', (e) => {
+      if (!isRunning) return;
+
+      if (target.dataset.star === 'true') {
+        score += 3;
+      } else {
+        score += 1;
+      }
+      updateUI();
+      createHitEffect(e.clientX, e.clientY);
+      target.remove();
+    });
+
+    document.body.appendChild(target);
+
+    const life = randomBetween(targetLifeMin, targetLifeMax);
+    setTimeout(() => {
+      if (document.body.contains(target)) {
+        target.remove();
+      }
+    }, life);
+
+    scheduleNextSpawn();
+  }
+
+  function scheduleNextSpawn() {
+    if (!isRunning) return;
+    const delay = randomBetween(minSpawnInterval, maxSpawnInterval);
+    spawnTimeoutId = setTimeout(spawnTargetOnce, delay);
+  }
+
+  function createHitEffect(x, y) {
+    const effect = document.createElement('div');
+    effect.className = 'hit-effect';
+    effect.style.left = `${x}px`;
+    effect.style.top = `${y}px`;
+    document.body.appendChild(effect);
+    setTimeout(() => effect.remove(), 400);
+  }
+
+  function createMissEffect(x, y) {
+    const miss = document.createElement('div');
+    miss.className = 'miss-x';
+    miss.style.left = `${x}px`;
+    miss.style.top = `${y}px`;
+    document.body.appendChild(miss);
+    setTimeout(() => miss.remove(), 500);
+  }
+
+  function removeAllTargets() {
+    document.querySelectorAll('.target').forEach(t => t.remove());
+  }
+
+  function showMessage(text) {
+    const msg = document.getElementById('message');
+    if (!msg) return;
+    msg.textContent = text;
+    msg.style.display = 'block';
+  }
+
+  function hideMessage() {
+    const msg = document.getElementById('message');
+    if (!msg) return;
+    msg.style.display = 'none';
+  }
+
+  // ===== 3. 시작/일시정지/종료 =====
+  function startGame() {
+    if (isRunning) return;
+    isRunning = true;
+    score = 0;
+    timeLeft = 30;
+    starsSpawnedThisGame = 0;
+    updateUI();
+
+    hideMessage();
+    removeAllTargets();
+
+    if (timerId) clearInterval(timerId);
+    timerId = setInterval(() => {
+      timeLeft--;
+      updateUI();
+      if (timeLeft <= 0) {
+        endGame();
+      }
+    }, 1000);
+
+    if (spawnTimeoutId) clearTimeout(spawnTimeoutId);
+    scheduleNextSpawn();
+  }
+
+  function pauseGame() {
+    if (!isRunning) return;
+    isRunning = false;
+    if (timerId) {
+      clearInterval(timerId);
+      timerId = null;
+    }
+    if (spawnTimeoutId) {
+      clearTimeout(spawnTimeoutId);
+      spawnTimeoutId = null;
+    }
+  }
+
+  function endGame() {
+    if (!isRunning && timeLeft <= 0) return;
+    isRunning = false;
+
+    if (timerId) {
+      clearInterval(timerId);
+      timerId = null;
+    }
+    if (spawnTimeoutId) {
+      clearTimeout(spawnTimeoutId);
+      spawnTimeoutId = null;
+    }
+
+    removeAllTargets();
+
+    const name = prompt('이름을 입력하세요') || 'noname';
+    addScoreToBin(name, score).then(() => {
+      renderRanking().then(() => {
+        updatePopupRanking();
+      });
+    });
+
+    showMessage(`게임 종료! 점수: ${score}`);
+    showStartOverlay();
+  }
+
+  // 빈 곳 클릭 시 미스
+  document.addEventListener('click', (e) => {
+    const isTarget = e.target.classList.contains('target');
+    const isButton = e.target.tagName === 'BUTTON';
+    const isOverlay = e.target.id === 'startOverlay' || e.target.id === 'startButton';
+    if (!isTarget && !isButton && !isOverlay && isRunning) {
+      createMissEffect(e.clientX, e.clientY);
+    }
+  });
+
+  // ===== 4. 시작 팝업 + 큰 랭킹 =====
+  function createStartOverlayIfNeeded() {
+    if (document.getElementById('startOverlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'startOverlay';
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100vw';
+    overlay.style.height = '100vh';
+    overlay.style.background = 'rgba(0,0,0,0.4)';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.zIndex = '1200';
+
+    const container = document.createElement('div');
+    container.style.display = 'flex';
+    container.style.flexDirection = 'row';
+    container.style.alignItems = 'flex-start';
+    container.style.justifyContent = 'center';
+    container.style.gap = '40px';
+
+    const startBtn = document.createElement('button');
+    startBtn.id = 'startButton';
+    startBtn.textContent = '시작!!';
+    startBtn.style.fontSize = '2.2rem';
+    startBtn.style.fontWeight = 'bold';
+    startBtn.style.padding = '18px 36px';
+    startBtn.style.borderRadius = '10px';
+    startBtn.style.border = 'none';
+    startBtn.style.cursor = 'pointer';
+
+    startBtn.addEventListener('click', () => {
+      overlay.style.display = 'none';
+      startGame();
+    });
+
+    const popupRankBox = document.createElement('div');
+    popupRankBox.id = 'popupRankBox';
+    popupRankBox.style.background = 'rgba(255,255,255,0.97)';
+    popupRankBox.style.padding = '14px 18px';
+    popupRankBox.style.borderRadius = '10px';
+    popupRankBox.style.minWidth = '260px';
+    popupRankBox.style.maxHeight = '70vh';
+    popupRankBox.style.overflowY = 'auto';
+    popupRankBox.style.fontSize = '1rem';
+
+    const title = document.createElement('div');
+    title.textContent = '랭킹 (1~10위)';
+    title.style.fontWeight = 'bold';
+    title.style.marginBottom = '6px';
+    title.style.fontSize = '1.1rem';
+
+    const ol = document.createElement('ol');
+    ol.id = 'popupRankList';
+    ol.style.margin = '0';
+    ol.style.paddingLeft = '20px';
+
+    popupRankBox.appendChild(title);
+    popupRankBox.appendChild(ol);
+
+    container.appendChild(startBtn);
+    container.appendChild(popupRankBox);
+    overlay.appendChild(container);
+    document.body.appendChild(overlay);
+  }
+
+  async function updatePopupRanking() {
+    const scores = await getTop10FromBin();
+    const popupList = document.getElementById('popupRankList');
+    if (!popupList) return;
+
+    popupList.innerHTML = '';
+    scores.forEach((item, idx) => {
+      const li = document.createElement('li');
+      li.textContent = `${idx + 1}위 - ${item.name}: ${item.score}`;
+
+      if (idx === 0) {
+        li.style.fontWeight = '900';
+        li.style.fontSize = '1.3rem';
+        li.style.color = '#d4af37';
+      } else if (idx === 1) {
+        li.style.fontWeight = '800';
+        li.style.fontSize = '1.2rem';
+        li.style.color = '#c0c0c0';
+      } else if (idx === 2) {
+        li.style.fontWeight = '800';
+        li.style.fontSize = '1.15rem';
+        li.style.color = '#cd7f32';
+      } else {
+        li.style.fontWeight = '500';
+        li.style.fontSize = '1rem';
+        li.style.opacity = '0.9';
+      }
+      popupList.appendChild(li);
+    });
+  }
+
+  function showStartOverlay() {
+    createStartOverlayIfNeeded();
+    const overlay = document.getElementById('startOverlay');
+    if (overlay) {
+      overlay.style.display = 'flex';
+      updatePopupRanking();
+    }
+  }
+
+  // ===== 5. 초기화 =====
+  window.addEventListener('load', () => {
+    const endBtn = document.getElementById('endBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const restartBtn = document.getElementById('restartBtn');
+
+    if (endBtn) endBtn.addEventListener('click', endGame);
+    if (pauseBtn) pauseBtn.addEventListener('click', pauseGame);
+    if (restartBtn) restartBtn.style.display = 'none';
+
+    // 슬라이더 이벤트 연결
+    const countRange = document.getElementById('targetCountRange');
+    const speedRange = document.getElementById('speedRange');
+    if (countRange) countRange.addEventListener('input', applyDifficultyFromSliders);
+    if (speedRange) speedRange.addEventListener('input', applyDifficultyFromSliders);
+    applyDifficultyFromSliders();
+
+    updateUI();
+    renderRanking().then(() => {
+      showStartOverlay();
+    });
+  });
 </script>
+
 
 
 </body>
