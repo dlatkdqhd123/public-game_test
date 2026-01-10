@@ -1,4 +1,3 @@
-<index.html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -77,7 +76,6 @@
             z-index: 1000;
         }
 
-        /* 맞췄을 때 터지는 원 이펙트 */
         .hit-effect {
             position: absolute;
             width: 10px;
@@ -100,7 +98,6 @@
             }
         }
 
-        /* 잘못 클릭했을 때 X 이펙트 */
         .miss-x {
             position: absolute;
             width: 24px;
@@ -149,7 +146,7 @@
     <button id="pauseBtn">일시정지</button>
     <button id="restartBtn">다시 시작</button>
 
-    <!-- 추가: 난이도 조절 바 -->
+    <!-- 난이도 조절 바 -->
     <div style="margin-left: 10px; color: black; font-size: 0.8rem;">
         동시 타겟 수:
         <input id="targetCountRange" type="range" min="1" max="5" value="2">
@@ -161,13 +158,8 @@
     </div>
 </div>
 
-    <button id="endBtn">게임 종료</button>
-    <button id="pauseBtn">일시정지</button>
-    <button id="restartBtn">다시 시작</button>
-</div>
-
 <div id="leaderboard">
-    <h3>순위표 (상위 5명)</h3>
+    <h3>순위표 (상위 10명)</h3>
     <ol id="rankList"></ol>
 </div>
 <div id="message"></div>
@@ -220,7 +212,7 @@
     }
   }
 
-  // 좌측 하단 순위표 (1~10위, 1~3위 강조)
+  // 좌측 하단 순위표 (1~10위, 1~3위 왕관 강조)
   async function renderRanking() {
     const scores = await getTop10FromBin();
     const listEl = document.getElementById('rankList');
@@ -229,23 +221,28 @@
     listEl.innerHTML = '';
     scores.forEach((item, idx) => {
       const li = document.createElement('li');
-      li.textContent = `${idx + 1}위 - ${item.name}: ${item.score}`;
 
+      let prefix = '';
       if (idx === 0) {
+        prefix = '👑 ';
         li.style.fontWeight = '900';
         li.style.fontSize = '1.1rem';
         li.style.color = '#d4af37';
       } else if (idx === 1) {
+        prefix = '👑 ';
         li.style.fontWeight = '800';
         li.style.fontSize = '1.05rem';
         li.style.color = '#c0c0c0';
       } else if (idx === 2) {
+        prefix = '👑 ';
         li.style.fontWeight = '800';
         li.style.fontSize = '1.02rem';
         li.style.color = '#cd7f32';
       } else {
         li.style.opacity = '0.9';
       }
+
+      li.textContent = `${prefix}${item.name}: ${item.score}`;
       listEl.appendChild(li);
     });
   }
@@ -281,7 +278,7 @@
     return Math.random() * (max - min) + min;
   }
 
-  // ★ 슬라이더 → 난이도 적용
+  // 슬라이더 → 난이도 적용
   function applyDifficultyFromSliders() {
     const countRange = document.getElementById('targetCountRange');
     const speedRange = document.getElementById('speedRange');
@@ -489,7 +486,6 @@
     showStartOverlay();
   }
 
-  // 빈 곳 클릭 시 미스
   document.addEventListener('click', (e) => {
     const isTarget = e.target.classList.contains('target');
     const isButton = e.target.tagName === 'BUTTON';
@@ -576,25 +572,30 @@
     popupList.innerHTML = '';
     scores.forEach((item, idx) => {
       const li = document.createElement('li');
-      li.textContent = `${idx + 1}위 - ${item.name}: ${item.score}`;
 
+      let prefix = '';
       if (idx === 0) {
+        prefix = '👑 ';
         li.style.fontWeight = '900';
-        li.style.fontSize = '1.3rem';
+        li.style.fontSize = '1.4rem';
         li.style.color = '#d4af37';
       } else if (idx === 1) {
+        prefix = '👑 ';
         li.style.fontWeight = '800';
-        li.style.fontSize = '1.2rem';
+        li.style.fontSize = '1.25rem';
         li.style.color = '#c0c0c0';
       } else if (idx === 2) {
+        prefix = '👑 ';
         li.style.fontWeight = '800';
-        li.style.fontSize = '1.15rem';
+        li.style.fontSize = '1.18rem';
         li.style.color = '#cd7f32';
       } else {
         li.style.fontWeight = '500';
         li.style.fontSize = '1rem';
         li.style.opacity = '0.9';
       }
+
+      li.textContent = `${prefix}${item.name}: ${item.score}`;
       popupList.appendChild(li);
     });
   }
@@ -618,7 +619,6 @@
     if (pauseBtn) pauseBtn.addEventListener('click', pauseGame);
     if (restartBtn) restartBtn.style.display = 'none';
 
-    // 슬라이더 이벤트 연결
     const countRange = document.getElementById('targetCountRange');
     const speedRange = document.getElementById('speedRange');
     if (countRange) countRange.addEventListener('input', applyDifficultyFromSliders);
@@ -631,8 +631,5 @@
     });
   });
 </script>
-
-
-
 </body>
 </html>
