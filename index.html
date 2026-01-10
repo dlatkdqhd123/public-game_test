@@ -217,6 +217,68 @@ async function renderRanking() {
     listEl.appendChild(li);
   });
 }
+let timeLeft = 30;
+let score = 0;
+let timerId = null;
+
+function updateUI() {
+  const scoreEl = document.getElementById('score');
+  const timeEl  = document.getElementById('time');
+  if (scoreEl) scoreEl.textContent = score;
+  if (timeEl)  timeEl.textContent  = timeLeft;
+}
+
+function startGame() {
+  if (timerId) return; // 이미 진행 중이면 무시
+  timeLeft = 30;
+  score = 0;
+  updateUI();
+
+  timerId = setInterval(() => {
+    timeLeft--;
+    updateUI();
+    if (timeLeft <= 0) {
+      endGame();
+    }
+  }, 1000);
+}
+
+function pauseGame() {
+  if (!timerId) return;
+  clearInterval(timerId);
+  timerId = null;
+}
+
+function restartGame() {
+  pauseGame();
+  startGame();
+}
+
+function endGame() {
+  pauseGame();
+  const name = prompt('이름을 입력하세요') || 'noname';
+  // JSONBin 저장 함수가 있다면 여기서 호출
+  if (typeof addScoreToBin === 'function') {
+    addScoreToBin(name, score).then(() => {
+      if (typeof renderRanking === 'function') renderRanking();
+    });
+  }
+}
+
+// 페이지 로드 시 버튼 연결 + 순위표 렌더링
+window.addEventListener('load', () => {
+  const startBtn   = document.getElementById('start-button');
+  const pauseBtn   = document.getElementById('pause-button');
+  const restartBtn = document.getElementById('restart-button');
+
+  if (startBtn)   startBtn.addEventListener('click', startGame);
+  if (pauseBtn)   pauseBtn.addEventListener('click', pauseGame);
+  if (restartBtn) restartBtn.addEventListener('click', restartGame);
+
+  if (typeof renderRanking === 'function') {
+    renderRanking();
+  }
+});
 
 </script>
 
